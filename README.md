@@ -50,8 +50,8 @@ Python 3.x and MySQL.
 ### Setup
 1. Download the SQL and vector database data from this [link](https://drive.google.com/drive/folders/1iUGLdECJHsyuheCXLZ6gUXzXGj0wqKkW?usp=drive_link).
 2. Create a MySQL database and import the SQL data into your local MySQL database using the below command :-
-  ```
-  bashuse <database-name>;
+  ```bash
+  use <database-name>;
   source <filename>.sql;
   ```
 4. Fill the required environment variables in the `.env` file.
