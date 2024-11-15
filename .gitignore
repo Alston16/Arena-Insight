@@ -4,5 +4,4 @@ Include/
 Lib/
 Scripts/
 share/
-.env
 *.cfg
