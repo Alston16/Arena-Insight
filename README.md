@@ -54,8 +54,8 @@ Python 3.x and MySQL.
   use <database-name>;
   source <filename>.sql;
   ```
-4. Fill the required environment variables in the `.env` file.
-5. Install the required libraries using the below command :-
+3. Fill the required environment variables in the `.env` file.
+4. Install the required libraries using the below command :-
   ```bash
   pip install -r requirements.txt
   ```
