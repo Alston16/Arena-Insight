@@ -13,9 +13,11 @@ from vector_db_agent import VectorDBAgent
 from web_search_agent import WebSearchAgent
 
 class QueryProcessor:
-    def __init__(self, llm : any, verbose : bool = False) -> None:
+    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2) -> None:
         load_dotenv()
         self.verbose = verbose
+        self.maxRetry = maxRetry
+        self.tries = 0
         self.queryContextualizer = QueryContextualizer(llm, verbose = verbose)
         self.llm = llm
         sqlDBAgent = SQLDBAgent(llm, verbose = verbose)
@@ -49,6 +51,12 @@ class QueryProcessor:
     def route(self, state: MessagesState) -> Literal["sql_db_agent", "vector_db_agent", "web_search_agent", "generate"]:
         if self.verbose:
             print("---ROUTING QUERY---")
+        self.tries = self.tries + 1
+        if self.tries > self.maxRetry:
+            if self.verbose:
+                print("---MAX RETRIES REACHED---")
+                print("Routed to web_search_agent")
+            return "web_search_agent"
         destination = self.route_chain.invoke({"messages": [state["messages"][-1]]})
         if self.verbose:
             print("Routed to", destination)
@@ -68,6 +76,7 @@ class QueryProcessor:
     def generate(self, state : MessagesState) -> MessagesState:
         if self.verbose:
             print("---GENERATING FINAL RESPONSE---")
+        self.tries = 0
         messages = state["messages"]
         question = messages[0].content
 
