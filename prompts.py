@@ -67,6 +67,10 @@ NEVER make stuff up if you don't have enough information to answer the query... 
 If you have enough information to answer the input question, simply invoke the appropriate tool to submit the final answer to the user.
 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+
+NO PREAMBLE.
+
+Here are some examples of user inputs and their corresponding SQL queries:
 """
 
 grade_document_prompt = """

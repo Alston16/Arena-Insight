@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from langchain_core.messages import ToolMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableLambda, RunnableWithFallbacks
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder,SystemMessagePromptTemplate
 from langchain_core.tools import tool
 from langchain_core.runnables.graph import MermaidDrawMethod
 from langgraph.graph import END, START, StateGraph, MessagesState
@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from sql_db import SQLDB
 from prompts import query_check_system_prompt, query_gen_system_prompt
+from few_shots import few_shots
 
 class SQLDBAgent:
     def __init__(self, llm: any, verbose: bool = False, maxRetry : int = 3):
@@ -38,7 +39,11 @@ class SQLDBAgent:
             return result
         
         query_check_prompt = ChatPromptTemplate.from_messages(
-            [("system", query_check_system_prompt), ("placeholder", "{messages}")]
+            [
+                HumanMessage(content="{input}"),
+                SystemMessagePromptTemplate.from_template(query_check_system_prompt),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
         )
         self.query_check = query_check_prompt | llm.bind_tools(
             [db_query_tool], tool_choice="required"
@@ -65,8 +70,18 @@ class SQLDBAgent:
 
             final_answer: str = Field(..., description="The final answer to the user")
 
+        example_messages = [
+            SystemMessagePromptTemplate.from_template(
+                f"User input: {example['input']}\nSQL query: {example['query']}"
+            )
+            for example in few_shots
+        ]
         query_gen_prompt = ChatPromptTemplate.from_messages(
-            [("system", query_gen_system_prompt), ("placeholder", "{messages}")]
+            [
+                SystemMessagePromptTemplate.from_template(query_gen_system_prompt),
+                *example_messages,
+                MessagesPlaceholder(variable_name="messages"),
+            ]
         )
         self.query_gen = query_gen_prompt | llm.bind_tools(
             [SubmitFinalAnswer]
