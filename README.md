@@ -74,6 +74,8 @@ To test the application, add the queries on which the system is to be tested in 
 python trulens_tester.py
 ```
 
+Note :- The testing code works only in Linux based environments
+
 ---
 
 ## **Technologies Used**
