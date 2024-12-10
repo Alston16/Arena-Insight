@@ -71,7 +71,7 @@ streamlit run main.py
 
 To test the application, add the queries on which the system is to be tested in `test_suite.py` and run the below command :-
 ```bash
-python tester.py
+python trulens_tester.py
 ```
 
 ---
