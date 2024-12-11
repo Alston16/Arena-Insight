@@ -4,13 +4,14 @@ from typing import List, Dict, Literal
 from langchain import hub
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
-from langchain_core.output_parsers import StrOutputParser
+from langchain.output_parsers.enum import EnumOutputParser
 from langgraph.graph import END, START, StateGraph, MessagesState
 from query_contextualizer import QueryContextualizer
 from prompts import route_system_prompt
 from sql_db_agent import SQLDBAgent
 from vector_db_agent import VectorDBAgent
 from web_search_agent import WebSearchAgent
+from agents_enum import Agent
 
 class QueryProcessor:
     def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2) -> None:
@@ -28,7 +29,7 @@ class QueryProcessor:
             [("system", route_system_prompt), ("placeholder", "{messages}")]
         )
 
-        self.route_chain = route_prompt | llm | StrOutputParser()
+        self.route_chain = route_prompt | llm | EnumOutputParser(enum = Agent)
 
         workflow = StateGraph(MessagesState)
 
@@ -57,7 +58,7 @@ class QueryProcessor:
                 print("---MAX RETRIES REACHED---")
                 print("Routed to web_search_agent")
             return "web_search_agent"
-        destination = self.route_chain.invoke({"messages": [state["messages"][-1]]})
+        destination = self.route_chain.invoke({"messages": [state["messages"][-1]]}).value
         if self.verbose:
             print("Routed to", destination)
         return destination
