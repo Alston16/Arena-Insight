@@ -1,4 +1,5 @@
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Literal
+from langchain_core.messages import HumanMessage
 from trulens.core import TruSession, Feedback, Select
 from trulens.apps.custom import TruCustomApp, instrument
 from trulens.providers.litellm import LiteLLM
@@ -11,44 +12,80 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 
 from query_processor import QueryProcessor
+from vector_db_agent import VectorDBAgent
 
 class TruLensTester:
-    def __init__(self, use_context_relevance : bool = True, use_groundedness : bool = True, use_answer_relevance : bool = True) -> None:
+    def __init__(self, component_tested : Literal['query_processor', 'vector_db_agent', 'sql_db_agent', 'web_search_agent'] = 'query_processor', use_context_relevance : bool = True, use_groundedness : bool = True, use_answer_relevance : bool = True) -> None:
         load_dotenv()
+        self.component_tested = component_tested
         self.session = TruSession()
         self.session.reset_database()
         huggingfaceProvider = Huggingface()
         litellmProvider = LiteLLM(model_engine = os.environ['LITELLM_PROVIDER'] + '/' + os.environ['LITELLM_MODEL'])
-        instrument.methods(QueryProcessor, ["get_context", "processQuery"])
         self.feedbacks = []
 
-        if use_context_relevance:
-            f_context_relevance = (
-                Feedback(litellmProvider.context_relevance, name="Context Relevance")
-                .on_input()
-                .on(Select.RecordCalls.get_context.rets)
-                .aggregate(np.mean)
-            )
-            self.feedbacks.append(f_context_relevance)
-        
-        if use_groundedness:
-            f_groundedness = (
-                Feedback(
-                    huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
+        if component_tested == 'query_processor':
+            instrument.methods(QueryProcessor, ["get_context", "processQuery"])
+            if use_context_relevance:
+                f_context_relevance = (
+                    Feedback(litellmProvider.context_relevance, name="Context Relevance")
+                    .on_input()
+                    .on(Select.RecordCalls.get_context.rets)
+                    .aggregate(np.mean)
                 )
-                .on(Select.RecordCalls.get_context.rets)
-                .on_output()
-            )
-            self.feedbacks.append(f_groundedness)
-        
-        if use_answer_relevance:
-            f_answer_relevance = (
-                Feedback(
-                    litellmProvider.relevance, name="Answer Relevance"
+                self.feedbacks.append(f_context_relevance)
+            
+            if use_groundedness:
+                f_groundedness = (
+                    Feedback(
+                        huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
+                    )
+                    .on(Select.RecordCalls.get_context.rets)
+                    .on_output()
                 )
-                .on_input_output()
+                self.feedbacks.append(f_groundedness)
+            
+            if use_answer_relevance:
+                f_answer_relevance = (
+                    Feedback(
+                        litellmProvider.relevance, name="Answer Relevance"
+                    )
+                    .on_input_output()
             )
             self.feedbacks.append(f_answer_relevance)
+
+        elif component_tested == 'vector_db_agent':
+            instrument.method(VectorDBAgent, "generate")
+            if use_context_relevance:
+                f_context_relevance = (
+                    Feedback(litellmProvider.context_relevance, name="Context Relevance")
+                    .on(Select.RecordCalls.generate.rets["messages"][0].content)
+                    .on(Select.RecordCalls.generate.rets["messages"][-2].content)
+                    .aggregate(np.mean)
+                )
+                self.feedbacks.append(f_context_relevance)
+            
+            if use_groundedness:
+                f_groundedness = (
+                    Feedback(
+                        huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
+                    )
+                    .on(Select.RecordCalls.generate.rets["messages"][-2].content)
+                    .on(Select.RecordCalls.generate.rets["messages"][-1].content)
+                )
+                self.feedbacks.append(f_groundedness)
+            
+            if use_answer_relevance:
+                f_answer_relevance = (
+                    Feedback(
+                        litellmProvider.relevance, name="Answer Relevance"
+                    )
+                    .on(Select.RecordCalls.generate.rets["messages"][0].content)
+                    .on(Select.RecordCalls.generate.rets["messages"][-1].content)
+            )
+            self.feedbacks.append(f_answer_relevance)
+
+        
         
         run_dashboard(self.session)
     
@@ -66,7 +103,10 @@ class TruLensTester:
             print("Testing version", app["version"])
             with tru_app as recording:
                 for query in tqdm(queries, desc = "Testing queries", unit = "queries"):
-                    app["app"].processQuery(query, [])
+                    if self.component_tested == 'query_processor':
+                        app["app"].processQuery(query, [])
+                    else:
+                        app["app"].app.invoke({"messages": [HumanMessage(content = query)]})
                     time.sleep(5)
 
 if __name__ == '__main__':
@@ -82,11 +122,19 @@ if __name__ == '__main__':
         check_every_n_seconds = 0.1
     )
 
-    tester = TruLensTester()
+    # tester = TruLensTester()
+    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # apps = [
+    #     {
+    #         "app" : QueryProcessor(llm, verbose = True),
+    #         "version" : "base"
+    #     }
+    # ]
+    tester = TruLensTester(component_tested='vector_db_agent')
     llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
     apps = [
         {
-            "app" : QueryProcessor(llm, verbose = True),
+            "app" : VectorDBAgent(llm, verbose = True),
             "version" : "base"
         }
     ]
