@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from query_processor import QueryProcessor
 from vector_db_agent import VectorDBAgent
+from sql_db_agent import SQLDBAgent
 
 class TruLensTester:
     def __init__(self, component_tested : Literal['query_processor', 'vector_db_agent', 'sql_db_agent', 'web_search_agent'] = 'query_processor', use_context_relevance : bool = True, use_groundedness : bool = True, use_answer_relevance : bool = True) -> None:
@@ -26,67 +27,39 @@ class TruLensTester:
 
         if component_tested == 'query_processor':
             instrument.methods(QueryProcessor, ["get_context", "processQuery"])
-            if use_context_relevance:
-                f_context_relevance = (
-                    Feedback(litellmProvider.context_relevance, name="Context Relevance")
-                    .on_input()
-                    .on(Select.RecordCalls.get_context.rets)
-                    .aggregate(np.mean)
-                )
-                self.feedbacks.append(f_context_relevance)
-            
-            if use_groundedness:
-                f_groundedness = (
-                    Feedback(
-                        huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
-                    )
-                    .on(Select.RecordCalls.get_context.rets)
-                    .on_output()
-                )
-                self.feedbacks.append(f_groundedness)
-            
-            if use_answer_relevance:
-                f_answer_relevance = (
-                    Feedback(
-                        litellmProvider.relevance, name="Answer Relevance"
-                    )
-                    .on_input_output()
-            )
-            self.feedbacks.append(f_answer_relevance)
 
         elif component_tested == 'vector_db_agent':
-            instrument.method(VectorDBAgent, "generate")
-            if use_context_relevance:
-                f_context_relevance = (
-                    Feedback(litellmProvider.context_relevance, name="Context Relevance")
-                    .on(Select.RecordCalls.generate.rets["messages"][0].content)
-                    .on(Select.RecordCalls.generate.rets["messages"][-2].content)
-                    .aggregate(np.mean)
+            instrument.methods(VectorDBAgent,  ["get_context", "processQuery"])
+
+        
+        if use_context_relevance:
+            f_context_relevance = (
+                Feedback(litellmProvider.context_relevance, name="Context Relevance")
+                .on_input()
+                .on(Select.RecordCalls.get_context.rets)
+                .aggregate(np.mean)
+            )
+            self.feedbacks.append(f_context_relevance)
+        
+        if use_groundedness:
+            f_groundedness = (
+                Feedback(
+                    huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
                 )
-                self.feedbacks.append(f_context_relevance)
-            
-            if use_groundedness:
-                f_groundedness = (
-                    Feedback(
-                        huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
-                    )
-                    .on(Select.RecordCalls.generate.rets["messages"][-2].content)
-                    .on(Select.RecordCalls.generate.rets["messages"][-1].content)
+                .on(Select.RecordCalls.get_context.rets)
+                .on_output()
+            )
+            self.feedbacks.append(f_groundedness)
+        
+        if use_answer_relevance:
+            f_answer_relevance = (
+                Feedback(
+                    litellmProvider.relevance, name="Answer Relevance"
                 )
-                self.feedbacks.append(f_groundedness)
-            
-            if use_answer_relevance:
-                f_answer_relevance = (
-                    Feedback(
-                        litellmProvider.relevance, name="Answer Relevance"
-                    )
-                    .on(Select.RecordCalls.generate.rets["messages"][0].content)
-                    .on(Select.RecordCalls.generate.rets["messages"][-1].content)
+                .on_input_output()
             )
             self.feedbacks.append(f_answer_relevance)
 
-        
-        
         run_dashboard(self.session)
     
     def get_tru_app(self, app : QueryProcessor, version : str) -> TruCustomApp:
@@ -106,7 +79,7 @@ class TruLensTester:
                     if self.component_tested == 'query_processor':
                         app["app"].processQuery(query, [])
                     else:
-                        app["app"].app.invoke({"messages": [HumanMessage(content = query)]})
+                        app["app"].processQuery(query)
                     time.sleep(5)
 
 if __name__ == '__main__':

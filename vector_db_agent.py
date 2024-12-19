@@ -208,6 +208,14 @@ class VectorDBAgent:
         response = rag_chain.invoke({"context": docs, "question": question})
         return {"messages": [response]}
     
+    def get_context(self, state : MessagesState) -> str:
+        return state["messages"][-2].content
+    
+    def processQuery(self, query : str) -> str:
+        state = self.app.invoke({"messages": [HumanMessage(content = query)]})
+        self.get_context(state)
+        return state["messages"][-1].content
+    
     def visualize(self) -> None:
         image_data = self.app.get_graph().draw_mermaid_png(
                         draw_method=MermaidDrawMethod.API,
@@ -234,6 +242,6 @@ if __name__ == '__main__':
         verbose = True
         )
     # vectorDBAgent.visualize()
-    question = "How to score a three pointer in Basketball"
-    response =  vectorDBAgent.app.invoke({"messages": [HumanMessage(content = question)]})
-    print(response["messages"][-1].content)
+    question = "Who is Abhinav Bindra"
+    response =  vectorDBAgent.processQuery(question)
+    print(response)
