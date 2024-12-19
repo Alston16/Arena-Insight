@@ -14,6 +14,7 @@ from tqdm import tqdm
 from query_processor import QueryProcessor
 from vector_db_agent import VectorDBAgent
 from sql_db_agent import SQLDBAgent
+from web_search_agent import WebSearchAgent
 
 class TruLensTester:
     def __init__(self, component_tested : Literal['query_processor', 'vector_db_agent', 'sql_db_agent', 'web_search_agent'] = 'query_processor', use_context_relevance : bool = True, use_groundedness : bool = True, use_answer_relevance : bool = True) -> None:
@@ -30,6 +31,12 @@ class TruLensTester:
 
         elif component_tested == 'vector_db_agent':
             instrument.methods(VectorDBAgent,  ["get_context", "processQuery"])
+        
+        elif component_tested == 'web_search_agent':
+            instrument.methods(WebSearchAgent,  ["get_context", "processQuery"])
+        
+        else:
+            raise ValueError(f"Invalid component_tested: '{component_tested}'. Must be one of query_processor, vector_db_agent, sql_db_agent or web_search_agent.")
 
         
         if use_context_relevance:
