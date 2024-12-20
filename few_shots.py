@@ -33,7 +33,7 @@ few_shots = [
                LIMIT 1;"""
      },
     {
-        'input': "How many medals have Usain Bolt has won in Olympics till now" ,
+        'input': "How many medals have Usain Bolt has won in Olympics" ,
         'query' : """select total from athletes a, athlete_medals b where a.athlete_id=b.athlete_id and a.name like "%Usain Bolt%";"""
      } ,
      {
@@ -59,14 +59,6 @@ few_shots = [
                JOIN athlete_results r ON a.athlete_id = r.athlete_id
                WHERE r.medal_type IS NOT NULL AND a.noc = 'Afghanistan';
                """
-     },
-    {
-        'input' : "How many medals has Pierino Gabetti won in Olympics",
-        'query' : """SELECT COUNT(*) FROM
-          athletes a, athlete_results b WHERE
-          a.athlete_id = b.athlete_id AND b.medal_type IS NOT NULL
-          AND a.name LIKE "%Pierino Gabetti%";
-          """
      },
      {
          'input' : "How many medals has Australia men hockey team won",
