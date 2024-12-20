@@ -214,7 +214,7 @@ class SQLDBAgent:
             return "correct_query"
     
     def get_context(self, state : MessagesState) -> str:
-        tables = self.sqlDB.db.get_table_names()
+        tables = self.sqlDB.db.get_usable_table_names()
         schema = self.sqlDB.db.get_table_info()
         query = state["messages"][-3].tool_calls[0]["args"]["query"]
         result = state["messages"][-2].content
