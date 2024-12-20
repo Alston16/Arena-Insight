@@ -2,7 +2,6 @@ from typing import List, Dict, Union, Literal
 from trulens.core import TruSession, Feedback, Select
 from trulens.apps.custom import TruCustomApp, instrument
 from trulens.providers.litellm import LiteLLM
-from trulens.providers.huggingface import Huggingface
 from trulens.dashboard.run import run_dashboard
 import os
 import time
@@ -21,7 +20,6 @@ class TruLensTester:
         self.component_tested = component_tested
         self.session = TruSession()
         self.session.reset_database()
-        huggingfaceProvider = Huggingface()
         litellmProvider = LiteLLM(model_engine = os.environ['LITELLM_PROVIDER'] + '/' + os.environ['LITELLM_MODEL'])
         self.feedbacks = []
 
@@ -53,7 +51,7 @@ class TruLensTester:
         if use_groundedness:
             f_groundedness = (
                 Feedback(
-                    huggingfaceProvider.groundedness_measure_with_nli, name="Groundedness"
+                    litellmProvider.groundedness_measure_with_cot_reasons, name="Groundedness"
                 )
                 .on(Select.RecordCalls.get_context.rets)
                 .on_output()
