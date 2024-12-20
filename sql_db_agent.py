@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from langchain_core.messages import ToolMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableLambda, RunnableWithFallbacks
-from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder,SystemMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder,SystemMessagePromptTemplate, PromptTemplate
 from langchain_core.tools import tool
 from langchain_core.runnables.graph import MermaidDrawMethod
 from langgraph.graph import END, START, StateGraph, MessagesState
@@ -19,8 +19,8 @@ class SQLDBAgent:
         self.verbose = verbose
         self.tries = 0
         self.maxRetry = maxRetry
-        sqlDB = SQLDB(llm, verbose = verbose)
-        tools = sqlDB.get_tools()
+        self.sqlDB = SQLDB(llm, verbose = verbose)
+        tools = self.sqlDB.get_tools()
         list_tables_tool = next(tool for tool in tools if tool.name == "sql_db_list_tables")
         get_schema_tool = next(tool for tool in tools if tool.name == "sql_db_schema")
 
@@ -31,7 +31,7 @@ class SQLDBAgent:
             If the query is not correct, an error message will be returned.
             If an error is returned, rewrite the query, check the query, and try again.
             """
-            result = sqlDB.db.run_no_throw(query)
+            result = self.sqlDB.db.run_no_throw(query)
             if self.verbose:
                 print(result)
             if not result:
@@ -82,6 +82,10 @@ class SQLDBAgent:
                 *example_messages,
                 MessagesPlaceholder(variable_name="messages"),
             ]
+        )
+        self.context_prompt = PromptTemplate(
+            template = sql_context_prompt,
+            input_variables = ["tables", "schema", "query", "result"]
         )
         self.query_gen = query_gen_prompt | llm.bind_tools(
             [SubmitFinalAnswer]
@@ -210,7 +214,12 @@ class SQLDBAgent:
             return "correct_query"
     
     def get_context(self, state : MessagesState) -> str:
-        return state["messages"][-2].content
+        tables = self.sqlDB.db.get_table_names()
+        schema = self.sqlDB.db.get_table_info()
+        query = state["messages"][-3].tool_calls[0]["args"]["query"]
+        result = state["messages"][-2].content
+
+        return self.context_prompt.invoke({"tables" : tables, "schema" : schema, "query" : query, "result" : result})
     
     def processQuery(self, query : str) -> str:
         state = self.app.invoke({"messages": [HumanMessage(content = query)]})

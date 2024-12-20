@@ -82,7 +82,7 @@ Give a binary score 'yes' or 'no' score to indicate whether the document is rele
 """
 
 sql_context_prompt = """
-The SQL database with below tables :-
+The Olympics SQL database with below tables :-
 {tables}
 
 With the below schema :-
