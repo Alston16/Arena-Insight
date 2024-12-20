@@ -10,11 +10,11 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
 from sql_db import SQLDB
-from prompts import query_check_system_prompt, query_gen_system_prompt
+from prompts import query_check_system_prompt, query_gen_system_prompt, query_gen_few_shot_system_prompt
 from few_shots import few_shots
 
 class SQLDBAgent:
-    def __init__(self, llm: any, verbose: bool = False, maxRetry : int = 3):
+    def __init__(self, llm: any, verbose: bool = False, maxRetry : int = 3, use_few_shot : bool = True):
         self.llm = llm
         self.verbose = verbose
         self.tries = 0
@@ -69,20 +69,25 @@ class SQLDBAgent:
             """Submit the final answer to the user based on the query results."""
 
             final_answer: str = Field(..., description="The final answer to the user")
-
-        example_messages = [
-            SystemMessagePromptTemplate.from_template(
-                f"User input: {example['input']}\nSQL query: {example['query']}"
-            )
-            for example in few_shots
-        ]
-        query_gen_prompt = ChatPromptTemplate.from_messages(
-            [
-                SystemMessagePromptTemplate.from_template(query_gen_system_prompt),
-                *example_messages,
-                MessagesPlaceholder(variable_name="messages"),
+        
+        if use_few_shot:
+            example_messages = [
+                SystemMessagePromptTemplate.from_template(
+                    f"User input: {example['input']}\nSQL query: {example['query']}"
+                )
+                for example in few_shots
             ]
-        )
+            query_gen_prompt = ChatPromptTemplate.from_messages(
+                [
+                    SystemMessagePromptTemplate.from_template(query_gen_few_shot_system_prompt),
+                    *example_messages,
+                    MessagesPlaceholder(variable_name="messages"),
+                ]
+            )
+        else:
+            query_gen_prompt = ChatPromptTemplate.from_messages(
+                [("system", query_gen_system_prompt), ("placeholder", "{messages}")]
+            )
         self.query_gen = query_gen_prompt | llm.bind_tools(
             [SubmitFinalAnswer]
         )
@@ -240,4 +245,3 @@ if __name__ == '__main__':
     # question = "How many medals has Abhinav Bindra won in Shooting ?"
     # response =  sqlDBAgent.app.invoke({"messages": [HumanMessage(content = question)]})
     # print(response)
-    # print(response["messages"][-1].content)
