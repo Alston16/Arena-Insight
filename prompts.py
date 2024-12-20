@@ -10,7 +10,7 @@ You are a decision-making system tasked with determining whether the information
 You are given the following agents :-
 
 name : sql_db_agent
-description : Converts a question to a valid SQL query and queries a SQL database containing numerical and quantitative data about the participation and performance records of athletes and countries to obtain relevant information. 
+description : Converts a question to a valid SQL query and queries a SQL database containing numerical and quantitative data about the medals, participation and performance records of athletes and countries to obtain relevant information. 
 
 name : vector_db_agent
 description : Search a vector database created by adding information about various aspects of Olympics for relevant documents.
@@ -82,4 +82,17 @@ Here is the retrieved document: \n\n {context} \n\n
 Here is the user question: {question} \n
 If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
 Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.
+"""
+
+sql_context_prompt = """
+The Olympics SQL database with below tables :-
+{tables}
+
+With the below schema :-
+{schema}
+
+On being queried by the query : {query}
+
+Returns the following:-
+{result}
 """

@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from langchain_core.messages import ToolMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableLambda, RunnableWithFallbacks
-from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder,SystemMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate,MessagesPlaceholder,SystemMessagePromptTemplate, PromptTemplate
 from langchain_core.tools import tool
 from langchain_core.runnables.graph import MermaidDrawMethod
 from langgraph.graph import END, START, StateGraph, MessagesState
@@ -10,7 +10,7 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
 from sql_db import SQLDB
-from prompts import query_check_system_prompt, query_gen_system_prompt, query_gen_few_shot_system_prompt
+from prompts import query_check_system_prompt, query_gen_system_prompt, query_gen_few_shot_system_prompt, sql_context_prompt
 from few_shots import few_shots
 
 class SQLDBAgent:
@@ -19,8 +19,8 @@ class SQLDBAgent:
         self.verbose = verbose
         self.tries = 0
         self.maxRetry = maxRetry
-        sqlDB = SQLDB(llm, verbose = verbose)
-        tools = sqlDB.get_tools()
+        self.sqlDB = SQLDB(llm, verbose = verbose)
+        tools = self.sqlDB.get_tools()
         list_tables_tool = next(tool for tool in tools if tool.name == "sql_db_list_tables")
         get_schema_tool = next(tool for tool in tools if tool.name == "sql_db_schema")
 
@@ -31,7 +31,7 @@ class SQLDBAgent:
             If the query is not correct, an error message will be returned.
             If an error is returned, rewrite the query, check the query, and try again.
             """
-            result = sqlDB.db.run_no_throw(query)
+            result = self.sqlDB.db.run_no_throw(query)
             if self.verbose:
                 print(result)
             if not result:
@@ -70,6 +70,11 @@ class SQLDBAgent:
 
             final_answer: str = Field(..., description="The final answer to the user")
         
+        self.context_prompt = PromptTemplate(
+            template = sql_context_prompt,
+            input_variables = ["tables", "schema", "query", "result"]
+        )
+        
         if use_few_shot:
             example_messages = [
                 SystemMessagePromptTemplate.from_template(
@@ -88,6 +93,7 @@ class SQLDBAgent:
             query_gen_prompt = ChatPromptTemplate.from_messages(
                 [("system", query_gen_system_prompt), ("placeholder", "{messages}")]
             )
+
         self.query_gen = query_gen_prompt | llm.bind_tools(
             [SubmitFinalAnswer]
         )
@@ -214,6 +220,19 @@ class SQLDBAgent:
         else:
             return "correct_query"
     
+    def get_context(self, state : MessagesState) -> str:
+        tables = self.sqlDB.db.get_usable_table_names()
+        schema = self.sqlDB.db.get_table_info()
+        query = state["messages"][-3].tool_calls[0]["args"]["query"]
+        result = state["messages"][-2].content
+
+        return self.context_prompt.invoke({"tables" : tables, "schema" : schema, "query" : query, "result" : result})
+    
+    def processQuery(self, query : str) -> str:
+        state = self.app.invoke({"messages": [HumanMessage(content = query)]})
+        self.get_context(state)
+        return state["messages"][-1].content
+    
     def visualize(self) -> None:
         image_data = self.app.get_graph().draw_mermaid_png(
                         draw_method=MermaidDrawMethod.API,
@@ -241,8 +260,7 @@ if __name__ == '__main__':
             ), 
         verbose = True
     )
-    sqlDBAgent.visualize()
-    # question = "How many medals has Abhinav Bindra won in Shooting ?"
-    # response =  sqlDBAgent.app.invoke({"messages": [HumanMessage(content = question)]})
-    # print(response)
-    # print(response["messages"][-1].content)
+    # sqlDBAgent.visualize()
+    question = "Name the country who won most medals in Olympics"
+    response =  sqlDBAgent.processQuery(question)
+    print(response)
