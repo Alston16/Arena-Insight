@@ -245,3 +245,4 @@ if __name__ == '__main__':
     # question = "How many medals has Abhinav Bindra won in Shooting ?"
     # response =  sqlDBAgent.app.invoke({"messages": [HumanMessage(content = question)]})
     # print(response)
+    # print(response["messages"][-1].content)
