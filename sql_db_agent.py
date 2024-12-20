@@ -10,7 +10,7 @@ from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
 from sql_db import SQLDB
-from prompts import query_check_system_prompt, query_gen_system_prompt
+from prompts import query_check_system_prompt, query_gen_system_prompt, sql_context_prompt
 from few_shots import few_shots
 
 class SQLDBAgent:
@@ -209,6 +209,14 @@ class SQLDBAgent:
         else:
             return "correct_query"
     
+    def get_context(self, state : MessagesState) -> str:
+        return state["messages"][-2].content
+    
+    def processQuery(self, query : str) -> str:
+        state = self.app.invoke({"messages": [HumanMessage(content = query)]})
+        self.get_context(state)
+        return state["messages"][-1].content
+    
     def visualize(self) -> None:
         image_data = self.app.get_graph().draw_mermaid_png(
                         draw_method=MermaidDrawMethod.API,
@@ -236,8 +244,7 @@ if __name__ == '__main__':
             ), 
         verbose = True
     )
-    sqlDBAgent.visualize()
-    # question = "How many medals has Abhinav Bindra won in Shooting ?"
-    # response =  sqlDBAgent.app.invoke({"messages": [HumanMessage(content = question)]})
-    # print(response)
-    # print(response["messages"][-1].content)
+    # sqlDBAgent.visualize()
+    question = "Name the country who won most medals in Olympics"
+    response =  sqlDBAgent.processQuery(question)
+    print(response)

@@ -1,5 +1,4 @@
 from typing import List, Dict, Union, Literal
-from langchain_core.messages import HumanMessage
 from trulens.core import TruSession, Feedback, Select
 from trulens.apps.custom import TruCustomApp, instrument
 from trulens.providers.litellm import LiteLLM
@@ -31,6 +30,9 @@ class TruLensTester:
 
         elif component_tested == 'vector_db_agent':
             instrument.methods(VectorDBAgent,  ["get_context", "processQuery"])
+        
+        elif component_tested == 'sql_db_agent':
+            instrument.methods(SQLDBAgent,  ["get_context", "processQuery"])
         
         elif component_tested == 'web_search_agent':
             instrument.methods(WebSearchAgent,  ["get_context", "processQuery"])
