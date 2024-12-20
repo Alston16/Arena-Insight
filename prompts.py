@@ -69,6 +69,9 @@ If you have enough information to answer the input question, simply invoke the a
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
 NO PREAMBLE.
+"""
+
+query_gen_few_shot_system_prompt = query_gen_system_prompt + """
 
 Here are some examples of user inputs and their corresponding SQL queries:
 """

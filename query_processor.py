@@ -14,14 +14,14 @@ from web_search_agent import WebSearchAgent
 from agents_enum import Agent
 
 class QueryProcessor:
-    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2) -> None:
+    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2, use_few_shot : bool = True) -> None:
         load_dotenv()
         self.verbose = verbose
         self.maxRetry = maxRetry
         self.tries = 0
         self.queryContextualizer = QueryContextualizer(llm, verbose = verbose)
         self.llm = llm
-        sqlDBAgent = SQLDBAgent(llm, verbose = verbose)
+        sqlDBAgent = SQLDBAgent(llm, verbose = verbose, use_few_shot = use_few_shot)
         vectorDBAgent = VectorDBAgent(llm, verbose = verbose)
         webSearchAgent = WebSearchAgent(llm, verbose=verbose)
 
