@@ -102,21 +102,51 @@ if __name__ == '__main__':
         check_every_n_seconds = 0.1
     )
 
-    # tester = TruLensTester()
-    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
-    # apps = [
-    #     {
-    #         "app" : QueryProcessor(llm, verbose = True),
-    #         "version" : "base"
-    #     }
-    # ]
-    tester = TruLensTester(component_tested='vector_db_agent')
+    # Test the application
+    tester = TruLensTester()
     llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
     apps = [
         {
-            "app" : VectorDBAgent(llm, verbose = True),
+            "app" : QueryProcessor(llm),
             "version" : "base"
         }
     ]
     tester.evaluate(apps, queries)
+
+    # # Test Vector DB Agent
+    # tester = TruLensTester(component_tested='vector_db_agent')
+    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # apps = [
+    #     {
+    #         "app" : VectorDBAgent(llm),
+    #         "version" : "base"
+    #     }
+    # ]
+    # tester.evaluate(apps, queries)
+
+    # # Test SQL DB Agent
+    # tester = TruLensTester(component_tested='sql_db_agent')
+    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # apps = [
+    #     {
+    #         "app" : SQLDBAgent(llm),
+    #         "version" : "with_few_shot"
+    #     },
+    #     {
+    #         "app" : SQLDBAgent(llm, use_few_shot = False),
+    #         "version" : "without_few_shot"
+    #     }
+    # ]
+    # tester.evaluate(apps, queries)
+
+    # # Test Web Search Agent
+    # tester = TruLensTester(component_tested='web_search_agent')
+    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # apps = [
+    #     {
+    #         "app" : WebSearchAgent(llm),
+    #         "version" : "base"
+    #     }
+    # ]
+    # tester.evaluate(apps, queries)
     
