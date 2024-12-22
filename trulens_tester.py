@@ -134,7 +134,7 @@ if __name__ == '__main__':
     #         "version" : "with_metadata_and_semantic_filtering"
     #     }
     # ]
-    # tester.evaluate(apps, queries)
+    # tester.evaluate(apps, queries[0:50])
 
     # # Test SQL DB Agent
     # tester = TruLensTester(component_tested='sql_db_agent')
@@ -149,7 +149,7 @@ if __name__ == '__main__':
     #         "version" : "without_few_shot"
     #     }
     # ]
-    # tester.evaluate(apps, queries)
+    # tester.evaluate(apps, queries[50:100])
 
     # # Test Web Search Agent
     # tester = TruLensTester(component_tested='web_search_agent')
@@ -160,5 +160,5 @@ if __name__ == '__main__':
     #         "version" : "base"
     #     }
     # ]
-    # tester.evaluate(apps, queries)
+    # tester.evaluate(apps, queries[100:120])
     
