@@ -13,7 +13,7 @@ import os
 from dotenv import load_dotenv
 
 class VectorDBAgent:
-    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 3, use_semantic_filtering : bool = True) -> None:
+    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 3, use_semantic_filtering : bool = True, use_metadata_filtering = True) -> None:
         load_dotenv()
         self.llm = llm
         self.verbose = verbose
@@ -23,7 +23,8 @@ class VectorDBAgent:
             os.environ['VECTOR_DB_DIRECTORY'], 
             HuggingFaceEmbeddings(model_name=os.environ['EMBEDDINGS_MODEL']), 
             verbose = verbose,
-            use_semantic_filtering = use_semantic_filtering
+            use_semantic_filtering = use_semantic_filtering,
+            use_metadata_filtering = use_metadata_filtering
             )
         self.tools = [vectorDB.as_tool()]
 

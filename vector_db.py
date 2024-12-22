@@ -2,21 +2,39 @@ from langchain_chroma import Chroma
 from langchain.tools import StructuredTool
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer, util
+from transformers import pipeline
 
 class VectorDB:
-    def __init__(self, persist_directory : str, embedding_function : any, verbose : bool = False, use_semantic_filtering : bool = True) -> None:
+    def __init__(self, persist_directory : str, embedding_function : any, verbose : bool = False, use_semantic_filtering : bool = True, use_metadata_filtering = True) -> None:
         self.vectorstore = Chroma(persist_directory = persist_directory, embedding_function = embedding_function)
-        self.retriever = self.vectorstore.as_retriever()
+        if not use_metadata_filtering:
+            self.retriever = self.vectorstore.as_retriever()
         self.verbose = verbose
+        self.use_metadata_filtering = use_metadata_filtering
         self.use_semantic_filtering = use_semantic_filtering
+        if use_metadata_filtering:
+            self.classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+
+            self.labels = ["Badminton Rules", "Basketball Rules", "Boxing Rules", "Breaking Rules", "Fencing Rules", 
+            "Gymnastics Rules", "Handball Rules", "Judo Rules", "Table Tennis Rules", "Taekwondo Rules",
+            "Weightlifting Rules", "Wrestling Rules", "Olympic News", "Olympic Term Definition", "Player Data"]
         if use_semantic_filtering:
-            self.splitter = RecursiveCharacterTextSplitter(chunk_size=150, chunk_overlap=50)
+            self.splitter = RecursiveCharacterTextSplitter(chunk_size=250, chunk_overlap=50)
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
     def search(self, query : str) -> str:
         if self.verbose:
             print("---RETRIEVING CONTEXT---")
-        docs = list(map(lambda x : x.page_content, self.retriever.invoke(query)))
+        if self.use_metadata_filtering:
+            threshold = 0.15
+            classifier_results = self.classifier(query, candidate_labels = self.labels)
+            classifier_labels = classifier_results['labels']
+            clssifier_scores = classifier_results['scores']
+            query_labels = [classifier_labels[i] for i in range(len(clssifier_scores)) if clssifier_scores[i] > threshold]
+            retriever = self.vectorstore.as_retriever(search_kwargs = {"filter" : {"data-type" : {"$in" : query_labels}}})
+            docs = list(map(lambda x : x.page_content, retriever.invoke(query)))
+        else:
+            docs = list(map(lambda x : x.page_content, self.retriever.invoke(query)))
         if self.use_semantic_filtering:
             docs = sum(map(self.splitter.split_text, docs), [])
             query_embedding = self.embedding_model.encode(query)
@@ -46,5 +64,5 @@ if __name__ == '__main__':
         HuggingFaceEmbeddings(model_name=os.environ['EMBEDDINGS_MODEL']), 
         verbose = True
         )
-    question = 'Tell me about Michael Phelps'
+    question = 'How to score a 3 pointer in Basketball'
     print(vectorDB.search(question))
