@@ -14,7 +14,7 @@ from web_search_agent import WebSearchAgent
 from agents_enum import Agent
 
 class QueryProcessor:
-    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2, use_few_shot : bool = True) -> None:
+    def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2, use_few_shot : bool = True, use_semantic_filtering : bool = True, use_metadata_filtering = True) -> None:
         load_dotenv()
         self.verbose = verbose
         self.maxRetry = maxRetry
@@ -22,7 +22,7 @@ class QueryProcessor:
         self.queryContextualizer = QueryContextualizer(llm, verbose = verbose)
         self.llm = llm
         sqlDBAgent = SQLDBAgent(llm, verbose = verbose, use_few_shot = use_few_shot)
-        vectorDBAgent = VectorDBAgent(llm, verbose = verbose)
+        vectorDBAgent = VectorDBAgent(llm, verbose = verbose, use_semantic_filtering = use_semantic_filtering, use_metadata_filtering = use_metadata_filtering)
         webSearchAgent = WebSearchAgent(llm, verbose=verbose)
 
         route_prompt = ChatPromptTemplate.from_messages(
