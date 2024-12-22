@@ -118,8 +118,20 @@ if __name__ == '__main__':
     # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
     # apps = [
     #     {
-    #         "app" : VectorDBAgent(llm),
+    #         "app" : VectorDBAgent(llm, use_semantic_filtering = False, use_metadata_filtering = False),
     #         "version" : "base"
+    #     },
+    #     {
+    #         "app" : VectorDBAgent(llm, use_metadata_filtering = False),
+    #         "version" : "with_semantic_filtering"
+    #     },
+    #     {
+    #         "app" : VectorDBAgent(llm, use_semantic_filtering = False),
+    #         "version" : "with_metadata_filtering"
+    #     },
+    #     {
+    #         "app" : VectorDBAgent(llm),
+    #         "version" : "with_metadata_and_semantic_filtering"
     #     }
     # ]
     # tester.evaluate(apps, queries)
