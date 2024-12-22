@@ -1,5 +1,6 @@
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.runnables.graph import MermaidDrawMethod
+from langchain import hub
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ class WebSearchAgent:
         self.verbose = verbose
         load_dotenv()
         tool = TavilySearchResults(max_results = 2)
+        self.llm = llm
         self.llm_with_tool = llm.bind_tools([tool], tool_choice = 'required')
         tool_node = ToolNode([tool], name = "search")
 
@@ -29,6 +31,24 @@ class WebSearchAgent:
             print("---CALL WEB SEARCH AGENT---")
         response = self.llm_with_tool.invoke(state['messages'])
         return {"messages" : [response]}
+    
+    def get_context(self, state : MessagesState) -> str:
+        return state["messages"][-1].content
+    
+    def processQuery(self, query : str) -> str:
+        state = self.app.invoke({"messages": [HumanMessage(content = query)]})
+        context = self.get_context(state)
+
+        # Prompt
+        prompt = hub.pull("rlm/rag-prompt")
+
+        # Chain
+        rag_chain = prompt | self.llm
+
+        # Run
+        response = rag_chain.invoke({"context": context, "question": question})
+
+        return response
     
     def visualize(self) -> None:
         image_data = self.app.get_graph().draw_mermaid_png(
@@ -53,8 +73,7 @@ if __name__ == '__main__':
         ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter), 
         verbose = True
     )
-    webSearchAgent.visualize()
-    # question = "What is Olympics ?"
-    # response = webSearchAgent.app.invoke({"messages" : [HumanMessage(question)]})
-    # print(response["messages"][-1].content)
-
+    # webSearchAgent.visualize()
+    question = "What is Olympics ?"
+    response =  webSearchAgent.processQuery(question)
+    print(response)
