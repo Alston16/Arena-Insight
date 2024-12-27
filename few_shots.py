@@ -61,6 +61,10 @@ few_shots = [
                """
      },
      {
+         'input':"Name all the atheletes from India who were born after 1st January, 1990",
+         'query': """SELECT name FROM athletes WHERE STR_TO_DATE(SUBSTRING_INDEX(born, ' in ', 1),'%d %M %Y') > '1990-01-01' and noc like '%India%';"""
+     },
+     {
          'input' : "How many medals has Australia men hockey team won",
          'query' : """SELECT COUNT(DISTINCT e.event_id) AS total_medals
                     FROM athlete_part ap
