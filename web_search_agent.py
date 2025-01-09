@@ -4,7 +4,8 @@ from langchain import hub
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode
 from dotenv import load_dotenv
-    
+from langchain_core.messages import HumanMessage
+
 class WebSearchAgent:
     def __init__(self, llm : any, verbose : bool = False) -> None:
         self.verbose = verbose
@@ -46,7 +47,7 @@ class WebSearchAgent:
         rag_chain = prompt | self.llm
 
         # Run
-        response = rag_chain.invoke({"context": context, "question": question})
+        response = rag_chain.invoke({"context": context, "question": query})
 
         return response
     
@@ -62,7 +63,6 @@ class WebSearchAgent:
 if __name__ == '__main__':
     from langchain_mistralai import ChatMistralAI
     from langchain_core.rate_limiters import InMemoryRateLimiter
-    from langchain_core.messages import HumanMessage
     import os
     load_dotenv()
     rate_limiter = InMemoryRateLimiter(
