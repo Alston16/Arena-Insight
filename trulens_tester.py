@@ -90,21 +90,15 @@ class TruLensTester:
                     time.sleep(5)
 
 if __name__ == '__main__':
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.rate_limiters import InMemoryRateLimiter
+    from llm_factory import create_llm
 
     from test_suite import queries
 
     load_dotenv()
 
-    rate_limiter = InMemoryRateLimiter(
-        requests_per_second = 0.1,
-        check_every_n_seconds = 0.1
-    )
-
     # Test the application
     tester = TruLensTester()
-    llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    llm = create_llm()
     apps = [
         {
             "app" : QueryProcessor(llm),
@@ -115,7 +109,7 @@ if __name__ == '__main__':
 
     # # Test Vector DB Agent
     # tester = TruLensTester(component_tested='vector_db_agent')
-    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # llm = create_llm()
     # apps = [
     #     {
     #         "app" : VectorDBAgent(llm, use_semantic_filtering = False, use_metadata_filtering = False),
@@ -138,7 +132,7 @@ if __name__ == '__main__':
 
     # # Test SQL DB Agent
     # tester = TruLensTester(component_tested='sql_db_agent')
-    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # llm = create_llm()
     # apps = [
     #     {
     #         "app" : SQLDBAgent(llm),
@@ -153,7 +147,7 @@ if __name__ == '__main__':
 
     # # Test Web Search Agent
     # tester = TruLensTester(component_tested='web_search_agent')
-    # llm = ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter)
+    # llm = create_llm()
     # apps = [
     #     {
     #         "app" : WebSearchAgent(llm),

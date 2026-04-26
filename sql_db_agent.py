@@ -24,12 +24,13 @@ class SQLDBAgent:
         list_tables_tool = next(tool for tool in tools if tool.name == "sql_db_list_tables")
         get_schema_tool = next(tool for tool in tools if tool.name == "sql_db_schema")
 
-        @tool
+        @tool("sql_db_query", description="Execute a SQL query against the database. Only the query should be given as input, without any additional text.", return_direct=True)
         def db_query_tool(query: str) -> str:
             """
             Execute a SQL query against the database and get back the result.
             If the query is not correct, an error message will be returned.
             If an error is returned, rewrite the query, check the query, and try again.
+            Only the query should be given as input to this tool, without any additional text. For example, if the query is "SELECT name FROM athletes", then only "SELECT name FROM athletes" should be given as input, without any additional text like "The query is: SELECT name FROM athletes".
             """
             result = self.sqlDB.db.run_no_throw(query)
             if self.verbose:
@@ -243,21 +244,10 @@ class SQLDBAgent:
             f.write(image_data)
 
 if __name__ == '__main__':
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.rate_limiters import InMemoryRateLimiter
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
-    rate_limiter = InMemoryRateLimiter(
-        requests_per_second = 0.3,
-        check_every_n_seconds = 0.1
-    )
+    from llm_factory import create_llm
+
     sqlDBAgent = SQLDBAgent(
-        ChatMistralAI(
-            model_name = os.environ['MISTRAL_LLM_MODEL'], 
-            temperature = 0.1, 
-            rate_limiter = rate_limiter
-            ), 
+        create_llm(),
         verbose = True
     )
     # sqlDBAgent.visualize()

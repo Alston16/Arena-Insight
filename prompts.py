@@ -96,3 +96,17 @@ On being queried by the query : {query}
 Returns the following:-
 {result}
 """
+
+rag_prompt = """
+You are an assistant for question-answering tasks.
+Use the following retrieved context to answer the question.
+If the answer is not present in the context, say you do not have enough information.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
