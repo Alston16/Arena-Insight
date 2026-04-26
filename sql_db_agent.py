@@ -1,4 +1,6 @@
 from typing import Any, Literal
+import re
+from uuid import uuid4
 
 from langchain_core.messages import ToolMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableLambda, RunnableWithFallbacks
@@ -40,15 +42,9 @@ class SQLDBAgent:
             return result
         
         query_check_prompt = ChatPromptTemplate.from_messages(
-            [
-                HumanMessage(content="{input}"),
-                SystemMessagePromptTemplate.from_template(query_check_system_prompt),
-                MessagesPlaceholder(variable_name="messages"),
-            ]
+            [("system", query_check_system_prompt), ("human", "{query}")]
         )
-        self.query_check = query_check_prompt | llm.bind_tools(
-            [db_query_tool], tool_choice="required"
-        )
+        self.query_check = query_check_prompt | llm
 
         workflow = StateGraph(MessagesState)
         workflow.add_node("first_tool_call", self.first_tool_call)
@@ -144,13 +140,19 @@ class SQLDBAgent:
     def query_gen_node(self, state: MessagesState):
         if self.verbose:
             print("---CALL SQL DB AGENT---")
-        message = self.query_gen.invoke(state)
+        message = self.query_gen.invoke(
+            {"messages": self._sanitize_messages_for_query_gen(state)}
+        )
+        if self.verbose:
+            print(message)
         self.tries = self.tries + 1
+
+        normalized_message = self._normalize_query_gen_message(message)
 
         # Sometimes, the LLM will hallucinate and call the wrong tool. We need to catch this and return an error message.
         tool_messages = []
-        if message.tool_calls:
-            for tc in message.tool_calls:
+        if normalized_message.tool_calls:
+            for tc in normalized_message.tool_calls:
                 if tc["name"] != "SubmitFinalAnswer":
                     tool_messages.append(
                         ToolMessage(
@@ -160,21 +162,139 @@ class SQLDBAgent:
                     )
         else:
             if self.verbose:
-                print("Generated Query: ", message.content)
-            tool_messages = []
-        if message.tool_calls and not tool_messages:
-            message = AIMessage("Final_Answer:" + message.tool_calls[0]["args"]["final_answer"])
-        return {"messages": [message] + tool_messages}
+                print("Generated Query: ", normalized_message.content)
+            if not normalized_message.content.strip():
+                normalized_message = AIMessage(
+                    content="Error: Empty response generated. Output a SQL query or call SubmitFinalAnswer with the final answer."
+                )
+            elif self._has_successful_query_result(state):
+                normalized_message = AIMessage(
+                    content="Final_Answer:" + normalized_message.content.strip()
+                )
+            elif not self._looks_like_sql(normalized_message.content):
+                normalized_message = AIMessage(
+                    content=(
+                        "Error: Generated text was not a SQL query. Output only the SQL query to execute, "
+                        "or call SubmitFinalAnswer if you already have the final answer."
+                    )
+                )
+        if normalized_message.tool_calls and not tool_messages:
+            if self._has_successful_query_result(state):
+                normalized_message = AIMessage(
+                    "Final_Answer:" + normalized_message.tool_calls[0]["args"]["final_answer"]
+                )
+            else:
+                normalized_message = AIMessage(
+                    content=(
+                        "Error: Do not submit a final answer before executing a SQL query. "
+                        "Output only the SQL query to execute."
+                    )
+                )
+        return {"messages": [normalized_message] + tool_messages}
     
+    def _sanitize_messages_for_query_gen(self, state: MessagesState) -> list[HumanMessage | AIMessage]:
+        """
+        Strip prior tool-call metadata from the conversation before asking the model to
+        generate SQL. Some local models will incorrectly reuse earlier tool names when
+        tool-call messages are present in the state.
+        """
+        sanitized_messages: list[HumanMessage | AIMessage] = []
+
+        for message in state["messages"]:
+            if isinstance(message, HumanMessage):
+                sanitized_messages.append(message)
+            elif isinstance(message, ToolMessage):
+                sanitized_messages.append(
+                    HumanMessage(content=f"Tool output:\n{message.content}")
+                )
+            elif isinstance(message, AIMessage) and message.content:
+                sanitized_messages.append(AIMessage(content=message.content))
+
+        return sanitized_messages
+
+    def _normalize_query_gen_message(self, message: AIMessage) -> AIMessage:
+        """
+        Handle provider quirks where a model puts raw SQL into SubmitFinalAnswer instead of
+        returning it as plain content.
+        """
+        if not message.tool_calls:
+            return message
+
+        tool_call = message.tool_calls[0]
+        if tool_call["name"] != "SubmitFinalAnswer":
+            return message
+
+        final_answer = tool_call["args"].get("final_answer", "").strip()
+        if self._looks_like_sql(final_answer):
+            return AIMessage(content=final_answer)
+
+        return message
+
+    def _looks_like_sql(self, text: str) -> bool:
+        candidate = text.strip()
+        if not candidate:
+            return False
+
+        return re.match(r"^(SELECT|WITH)\b", candidate, re.IGNORECASE) is not None
+
+    def _has_successful_query_result(self, state: MessagesState) -> bool:
+        for index in range(1, len(state["messages"])):
+            if (
+                isinstance(state["messages"][index], ToolMessage)
+                and isinstance(state["messages"][index - 1], AIMessage)
+            ):
+                for tool_call in state["messages"][index - 1].tool_calls:
+                    if (
+                        tool_call["name"] == "sql_db_query"
+                        and not state["messages"][index].content.startswith("Error:")
+                    ):
+                        return True
+
+        return False
+
     def model_check_query(self, state: MessagesState) -> dict[str, list[AIMessage]]:
         """
         Use this tool to double-check if your query is correct before executing it.
         """
         if self.verbose:
             print("---CHECKING QUERY---")
-        state["messages"].append(HumanMessage(state["messages"][-1].content))
-        response = self.query_check.invoke({"messages": [state["messages"][-1]]})
-        return {"messages": [response]}
+        original_query = state["messages"][-1].content
+        response = self.query_check.invoke({"query": original_query})
+        checked_query = self._extract_sql(response.content, fallback=original_query)
+
+        if self.verbose:
+            print("Checked Query:", checked_query)
+
+        return {
+            "messages": [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "sql_db_query",
+                            "args": {"query": checked_query},
+                            "id": f"sql_query_{uuid4().hex}",
+                        }
+                    ],
+                )
+            ]
+        }
+
+    def _extract_sql(self, text: str, fallback: str) -> str:
+        candidate = text.strip()
+        if not candidate:
+            return fallback.strip()
+
+        fenced_match = re.search(r"```(?:sql)?\s*(.*?)```", candidate, re.IGNORECASE | re.DOTALL)
+        if fenced_match:
+            candidate = fenced_match.group(1).strip()
+
+        lines = candidate.splitlines()
+        for index, line in enumerate(lines):
+            if re.match(r"^\s*(SELECT|WITH)\b", line, re.IGNORECASE):
+                return "\n".join(lines[index:]).strip()
+
+        return fallback.strip()
 
     def create_tool_node_with_fallback(self, tools: list) -> RunnableWithFallbacks[Any, dict]:
         """
@@ -224,14 +344,32 @@ class SQLDBAgent:
     def get_context(self, state : MessagesState) -> str:
         tables = self.sqlDB.db.get_usable_table_names()
         schema = self.sqlDB.db.get_table_info()
-        query = state["messages"][-3].tool_calls[0]["args"]["query"]
-        result = state["messages"][-2].content
+        query = None
+        result = None
+
+        for index in range(len(state["messages"]) - 1, 0, -1):
+            tool_message = state["messages"][index]
+            previous_message = state["messages"][index - 1]
+
+            if not isinstance(tool_message, ToolMessage) or not isinstance(previous_message, AIMessage):
+                continue
+
+            for tool_call in previous_message.tool_calls:
+                if tool_call["name"] == "sql_db_query":
+                    query = tool_call["args"].get("query")
+                    result = tool_message.content
+                    break
+
+            if query is not None:
+                break
+
+        if query is None or result is None:
+            return ""
 
         return self.context_prompt.invoke({"tables" : tables, "schema" : schema, "query" : query, "result" : result})
     
     def processQuery(self, query : str) -> str:
         state = self.app.invoke({"messages": [HumanMessage(content = query)]})
-        self.get_context(state)
         return state["messages"][-1].content
     
     def visualize(self) -> None:

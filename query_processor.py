@@ -46,7 +46,7 @@ class QueryProcessor:
 
         workflow.add_edge(START, "router")
         workflow.add_conditional_edges("router", self.route)
-        workflow.add_edge("sql_db_agent", "router")
+        workflow.add_conditional_edges("sql_db_agent", self.after_sql_db_agent)
         workflow.add_edge("vector_db_agent", "router")
         workflow.add_edge("web_search_agent", "generate")
         workflow.add_edge("generate", END)
@@ -71,6 +71,15 @@ class QueryProcessor:
         if isinstance(state["messages"][-1],HumanMessage):
             return state
         return {"messages" : [HumanMessage(state["messages"][-1].content)]}
+
+    def after_sql_db_agent(self, state: MessagesState) -> Literal["router", END]:
+        last_message = state["messages"][-1]
+
+        if last_message.content == "Unable to find the required context":
+            return "router"
+
+        self.tries = 0
+        return END
     
     def get_context(self, state : MessagesState) -> str:
         messages = state["messages"]
