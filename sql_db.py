@@ -5,18 +5,19 @@ from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from sqlalchemy.engine import URL
 
 
-DEFAULT_SQL_HOST = "mysql-17e5d930-arenainsight.c.aivencloud.com"
-DEFAULT_SQL_PORT = 20787
-DEFAULT_SQL_USER = "avnadmin"
-DEFAULT_SQL_DATABASE = "olympics_data"
-
-
 def _clean_env_value(value: str) -> str:
     return value.strip().strip("\"'")
 
 
+def _get_required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not _clean_env_value(value):
+        raise ValueError(f"Missing required environment variable: {name}")
+    return _clean_env_value(value)
+
+
 def _get_sqlalchemy_url() -> URL:
-    raw_host = _clean_env_value(os.getenv("SQL_HOST", DEFAULT_SQL_HOST))
+    raw_host = _get_required_env("SQL_HOST")
     raw_port = os.getenv("SQL_PORT")
 
     host = raw_host
@@ -27,25 +28,24 @@ def _get_sqlalchemy_url() -> URL:
             host = candidate_host
             port = candidate_port
 
-    user = _clean_env_value(os.getenv("SQL_USER", DEFAULT_SQL_USER))
-    password = _clean_env_value(os.getenv("SQL_PASSWORD", DEFAULT_SQL_PASSWORD))
-    database = _clean_env_value(os.getenv("SQL_DATABASE_NAME", DEFAULT_SQL_DATABASE))
+    user = _get_required_env("SQL_USER")
+    password = _get_required_env("SQL_PASSWORD")
+    database = _get_required_env("SQL_DATABASE_NAME")
 
     return URL.create(
         drivername="mysql+pymysql",
         username=user,
         password=password,
         host=host,
-        port=int(port or DEFAULT_SQL_PORT),
+        port=int(port or _get_required_env("SQL_PORT")),
         database=database,
     )
 
 class SQLDB:
     def __init__(self, llm : any, verbose : bool = False) -> None:
         load_dotenv()
-        print(_get_sqlalchemy_url())
         self.db = SQLDatabase.from_uri(
-            _get_sqlalchemy_url(),
+            _get_sqlalchemy_url().render_as_string(hide_password=False),
             sample_rows_in_table_info=3,
             engine_args={
                 "pool_pre_ping": True,
