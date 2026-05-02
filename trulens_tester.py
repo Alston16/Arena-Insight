@@ -1,6 +1,7 @@
-from typing import List, Dict, Union, Literal
-from trulens.core import TruSession, Feedback, Select
-from trulens.apps.custom import TruCustomApp, instrument
+from typing import List, Dict, Literal, Any
+from trulens.core import TruSession, Feedback
+from trulens.core.metric.selector import Selector
+from trulens.apps.app import TruApp, instrument
 from trulens.providers.litellm import LiteLLM
 from trulens.dashboard.run import run_dashboard
 import os
@@ -20,20 +21,24 @@ class TruLensTester:
         self.component_tested = component_tested
         self.session = TruSession()
         self.session.reset_database()
-        litellmProvider = LiteLLM(model_engine = os.environ['LITELLM_PROVIDER'] + '/' + os.environ['LITELLM_MODEL'])
+        self.litellmProvider = LiteLLM(model_engine = os.environ['LITELLM_PROVIDER'] + '/' + os.environ['LITELLM_MODEL'])
         self.feedbacks = []
 
         if component_tested == 'query_processor':
-            instrument.methods(QueryProcessor, ["get_context", "processQuery"])
+            QueryProcessor.get_context = instrument(QueryProcessor.get_context)
+            QueryProcessor.processQuery = instrument(QueryProcessor.processQuery)
 
         elif component_tested == 'vector_db_agent':
-            instrument.methods(VectorDBAgent,  ["get_context", "processQuery"])
+            VectorDBAgent.get_context = instrument(VectorDBAgent.get_context)
+            VectorDBAgent.processQuery = instrument(VectorDBAgent.processQuery)
         
         elif component_tested == 'sql_db_agent':
-            instrument.methods(SQLDBAgent,  ["get_context", "processQuery"])
+            SQLDBAgent.get_context = instrument(SQLDBAgent.get_context)
+            SQLDBAgent.processQuery = instrument(SQLDBAgent.processQuery)
         
         elif component_tested == 'web_search_agent':
-            instrument.methods(WebSearchAgent,  ["get_context", "processQuery"])
+            WebSearchAgent.get_context = instrument(WebSearchAgent.get_context)
+            WebSearchAgent.processQuery = instrument(WebSearchAgent.processQuery)
         
         else:
             raise ValueError(f"Invalid component_tested: '{component_tested}'. Must be one of query_processor, vector_db_agent, sql_db_agent or web_search_agent.")
@@ -41,9 +46,8 @@ class TruLensTester:
         
         if use_context_relevance:
             f_context_relevance = (
-                Feedback(litellmProvider.context_relevance, name="Context Relevance")
-                .on_input()
-                .on(Select.RecordCalls.get_context.rets)
+                Feedback(self.litellmProvider.context_relevance, name="Context Relevance")
+                .on({"question": Selector.select_record_input(), "context": Selector.select_context(collect_list=False)})
                 .aggregate(np.mean)
             )
             self.feedbacks.append(f_context_relevance)
@@ -51,17 +55,16 @@ class TruLensTester:
         if use_groundedness:
             f_groundedness = (
                 Feedback(
-                    litellmProvider.groundedness_measure_with_cot_reasons, name="Groundedness"
+                    self.litellmProvider.groundedness_measure_with_cot_reasons, name="Groundedness"
                 )
-                .on(Select.RecordCalls.get_context.rets)
-                .on_output()
+                .on({"source": Selector.select_context(collect_list=True), "statement": Selector.select_record_output()})
             )
             self.feedbacks.append(f_groundedness)
         
         if use_answer_relevance:
             f_answer_relevance = (
                 Feedback(
-                    litellmProvider.relevance, name="Answer Relevance"
+                    self.litellmProvider.relevance, name="Answer Relevance"
                 )
                 .on_input_output()
             )
@@ -69,19 +72,19 @@ class TruLensTester:
 
         run_dashboard(self.session)
     
-    def get_tru_app(self, app : QueryProcessor, version : str) -> TruCustomApp:
-        return TruCustomApp(
+    def get_tru_app(self, app : Any, version : str) -> TruApp:
+        return TruApp(
             app,
             app_name = "Olympics",
             app_version = version,
             feedbacks = self.feedbacks
         )
 
-    def evaluate(self, apps : Dict[str, Union[QueryProcessor, str]], queries : List[str]) -> None:
+    def evaluate(self, apps : List[Dict[str, Any]], queries : List[str]) -> None:
         for app in apps:
             tru_app = self.get_tru_app(app["app"], app["version"])
             print("Testing version", app["version"])
-            with tru_app as recording:
+            with tru_app:
                 for query in tqdm(queries, desc = "Testing queries", unit = "queries"):
                     if self.component_tested == 'query_processor':
                         app["app"].processQuery(query, [])
@@ -107,7 +110,7 @@ if __name__ == '__main__':
     ]
     tester.evaluate(apps, queries)
 
-    # # Test Vector DB Agent
+    # Test Vector DB Agent
     # tester = TruLensTester(component_tested='vector_db_agent')
     # llm = create_llm()
     # apps = [

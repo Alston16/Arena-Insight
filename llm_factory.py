@@ -57,7 +57,7 @@ def create_llm(provider: Optional[str] = None, temperature: Optional[float] = No
                 "LLM_PROVIDER=ollama_local requires 'langchain-ollama'. Install it with: pip install langchain-ollama"
             ) from exc
 
-        model_name = os.getenv("OLLAMA_MODEL", "mistral:7b")
+        model_name = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
         kwargs = {
