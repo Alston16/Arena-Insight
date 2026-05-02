@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 from typing import List, Dict, Literal
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
@@ -46,7 +45,7 @@ class QueryProcessor:
 
         workflow.add_edge(START, "router")
         workflow.add_conditional_edges("router", self.route)
-        workflow.add_conditional_edges("sql_db_agent", self.after_sql_db_agent)
+        workflow.add_edge("sql_db_agent", "router")
         workflow.add_edge("vector_db_agent", "router")
         workflow.add_edge("web_search_agent", "generate")
         workflow.add_edge("generate", END)
@@ -62,25 +61,26 @@ class QueryProcessor:
                 print("---MAX RETRIES REACHED---")
                 print("Routed to web_search_agent")
             return "web_search_agent"
-        destination = self.route_chain.invoke({"messages": [state["messages"][-1]]}).destination
+
+        # Give the router both the original question and latest retrieved context.
+        # This preserves architecture (router decides) while improving generate decisions.
+        first_message = state["messages"][0]
+        last_message = state["messages"][-1]
+        if first_message is last_message:
+            route_messages = [last_message]
+        else:
+            route_messages = [first_message, last_message]
+
+        destination = self.route_chain.invoke({"messages": route_messages}).destination
         if self.verbose:
             print("Routed to", destination)
         return destination
     
     def router(self, state: MessagesState) -> MessagesState:
         if isinstance(state["messages"][-1],HumanMessage):
-            return state
-        return {"messages" : [HumanMessage(state["messages"][-1].content)]}
+            return {"messages": []}
+        return {"messages" : [HumanMessage(f"Retrieved context from previous agent:\n{state['messages'][-1].content}")]}
 
-    def after_sql_db_agent(self, state: MessagesState) -> Literal["router", END]:
-        last_message = state["messages"][-1]
-
-        if last_message.content == "Unable to find the required context":
-            return "router"
-
-        self.tries = 0
-        return END
-    
     def get_context(self, state : MessagesState) -> str:
         messages = state["messages"]
         last_message = messages[-1]
