@@ -1,6 +1,9 @@
+import os
 import json
+import threading
 from pathlib import Path
 from typing import Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from openpyxl import Workbook, load_workbook
 from tqdm import tqdm
@@ -46,11 +49,6 @@ if not items:
 
 load_dotenv()
 
-queryProcessor = QueryProcessor(
-    create_llm(),
-    verbose = False
-    )
-
 excel_file = Path("deep_test_results.xlsx")
 workbook, sheet = get_or_create_workbook(excel_file)
 
@@ -61,28 +59,55 @@ if processed_count >= len(items):
 else:
     print(f"Resuming from item index {processed_count}")
 
-for index in tqdm(range(processed_count, len(items)), desc="Processing queries", unit="query"):
-    item = items[index]
+# Thread safe workbook writing
+workbook_lock = threading.Lock()
+thread_local = threading.local()
+
+def get_thread_query_processor():
+    if not hasattr(thread_local, "query_processor"):
+        thread_local.query_processor = QueryProcessor(
+            create_llm(),
+            verbose=False
+        )
+    return thread_local.query_processor
+
+def process_single_item(item):
     query_input = item.get("input", "")
     expected_output = item.get("output", item.get("expected_output", ""))
 
+    qp = get_thread_query_processor()
     try:
-        actual_output = queryProcessor.processQuery(query_input, [])
-        context = queryProcessor.get_generation_context()
-        routed_agent = queryProcessor.get_route_decision()
+        actual_output = qp.processQuery(query_input, [])
+        context = qp.get_generation_context()
+        routed_agent = qp.get_route_decision()
     except Exception as exc:
         actual_output = f"ERROR: {exc}"
         context = ""
         routed_agent = ""
 
-    sheet.append([
-        query_input,
-        context,
-        actual_output,
-        expected_output,
-        routed_agent,
-    ])
-    workbook.save(excel_file)
+    with workbook_lock:
+        sheet.append([
+            query_input,
+            context,
+            actual_output,
+            expected_output,
+            routed_agent,
+        ])
+        workbook.save(excel_file)
+
+if processed_count < len(items):
+    remaining_items = items[processed_count:]
+    max_workers = int(os.getenv("MAX_WORKERS", "4"))
+    print(f"Starting parallel queue processor with {max_workers} workers...")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_single_item, item): item for item in remaining_items}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing queries", unit="query"):
+            # We just consume the iterator to keep tqdm updated
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Task generated an exception: {e}")
 
 workbook.close()
 print(f"Completed. Results are in {excel_file}")

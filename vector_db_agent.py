@@ -18,9 +18,11 @@ class VectorDBAgent:
         self.verbose = verbose
         self.maxRetry = maxRetry
         self.tries = 0
+        import torch
+        device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
         vectorDB = VectorDB(
             os.environ['VECTOR_DB_DIRECTORY'], 
-            HuggingFaceEmbeddings(model_name=os.environ['EMBEDDINGS_MODEL']), 
+            HuggingFaceEmbeddings(model_name=os.environ['EMBEDDINGS_MODEL'], model_kwargs={'device': device}), 
             verbose = verbose,
             use_semantic_filtering = use_semantic_filtering,
             use_metadata_filtering = use_metadata_filtering

@@ -21,6 +21,7 @@ def create_llm(provider: Optional[str] = None, temperature: Optional[float] = No
     Supported providers:
     - mistral_api: Mistral hosted API via langchain-mistralai
     - ollama_local: Local models served through Ollama via langchain-ollama
+    - vllm: Local models served through vLLM via langchain-openai
     """
     load_dotenv()
 
@@ -49,6 +50,25 @@ def create_llm(provider: Optional[str] = None, temperature: Optional[float] = No
 
         return ChatMistralAI(**kwargs)
 
+    if selected_provider in {"vllm", "vllm_local"}:
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError as exc:
+            raise ImportError(
+                "LLM_PROVIDER=vllm requires 'langchain-openai'. Install it with: pip install langchain-openai"
+            ) from exc
+
+        model_name = os.getenv("VLLM_MODEL", os.getenv("OLLAMA_MODEL", "gpt-oss:20b"))
+        base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
+
+        kwargs = {
+            "model": model_name,
+            "openai_api_base": base_url,
+            "openai_api_key": "none",
+            "temperature": selected_temperature,
+        }
+        return ChatOpenAI(**kwargs)
+
     if selected_provider in {"ollama_local", "ollama"}:
         try:
             ChatOllama = import_module("langchain_ollama").ChatOllama
@@ -73,5 +93,5 @@ def create_llm(provider: Optional[str] = None, temperature: Optional[float] = No
         return ChatOllama(**kwargs)
 
     raise ValueError(
-        "Unsupported LLM_PROVIDER. Use one of: 'mistral_api', 'ollama_local'."
+        "Unsupported LLM_PROVIDER. Use one of: 'mistral_api', 'ollama_local', 'vllm'."
     )
