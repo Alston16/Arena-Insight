@@ -1,4 +1,5 @@
-from langchain_community.tools.tavily_search import TavilySearchResults
+# from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_tavily import TavilySearch
 from langchain_core.runnables.graph import MermaidDrawMethod
 from langchain_core.prompts import PromptTemplate
 from langgraph.graph import END, START, StateGraph, MessagesState
@@ -11,7 +12,8 @@ class WebSearchAgent:
     def __init__(self, llm : any, verbose : bool = False) -> None:
         self.verbose = verbose
         load_dotenv()
-        tool = TavilySearchResults(max_results = 2)
+        # tool = TavilySearchResults(max_results = 2)
+        tool = TavilySearch(max_results = 2)
         self.llm = llm
         self.llm_with_tool = llm.bind_tools([tool], tool_choice = 'required')
         tool_node = ToolNode([tool], name = "search")
@@ -39,7 +41,7 @@ class WebSearchAgent:
     
     def processQuery(self, query : str) -> str:
         state = self.app.invoke({"messages": [HumanMessage(content = query)]})
-        context = self.get_context(state)
+        self._last_context = self.get_context(state)
 
         # Prompt
         prompt = PromptTemplate(
@@ -51,7 +53,7 @@ class WebSearchAgent:
         rag_chain = prompt | self.llm
 
         # Run
-        response = rag_chain.invoke({"context": context, "question": query})
+        response = rag_chain.invoke({"context": self._last_context, "question": query})
 
         return response
     

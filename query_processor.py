@@ -51,6 +51,7 @@ class QueryProcessor:
         workflow.add_edge("generate", END)
 
         self.app = workflow.compile()
+        self.route_decision = ""
 
     def route(self, state: MessagesState) -> Literal["sql_db_agent", "vector_db_agent", "web_search_agent", "generate"]:
         if self.verbose:
@@ -60,6 +61,7 @@ class QueryProcessor:
             if self.verbose:
                 print("---MAX RETRIES REACHED---")
                 print("Routed to web_search_agent")
+            self.route_decision = "web_search_agent"
             return "web_search_agent"
 
         # Give the router both the original question and latest retrieved context.
@@ -72,6 +74,8 @@ class QueryProcessor:
             route_messages = [first_message, last_message]
 
         destination = self.route_chain.invoke({"messages": route_messages}).destination
+        if destination != "generate":
+            self.route_decision = destination
         if self.verbose:
             print("Routed to", destination)
         return destination
@@ -95,6 +99,7 @@ class QueryProcessor:
         question = messages[0].content
 
         docs = self.get_context(state)
+        self.context_for_generation = docs
 
         # Prompt
         prompt = PromptTemplate(
@@ -124,6 +129,12 @@ class QueryProcessor:
         question = self.queryContextualizer.contextualize(question, chatHistory)
         response =  self.app.invoke({"messages": [HumanMessage(content = question)]})
         return response["messages"][-1].content
+    
+    def get_route_decision(self) -> str:
+        return self.route_decision
+    
+    def get_generation_context(self) -> str:
+        return self.context_for_generation
 
 if __name__ == '__main__':
     from llm_factory import create_llm

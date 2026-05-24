@@ -45,19 +45,27 @@ class TruLensTester:
 
         
         if use_context_relevance:
+            # Select context from the stored _last_context attribute set by processQuery
             f_context_relevance = (
                 Feedback(self.litellmProvider.context_relevance, name="Context Relevance")
-                .on({"question": Selector.select_record_input(), "context": Selector.select_context(collect_list=False)})
+                .on({
+                    "question": Selector.select_record_input(),
+                    "context": Selector(lambda rec: rec.app._last_context if hasattr(rec.app, '_last_context') else "")
+                })
                 .aggregate(np.mean)
             )
             self.feedbacks.append(f_context_relevance)
         
         if use_groundedness:
+            # Select context from the stored _last_context attribute set by processQuery
             f_groundedness = (
                 Feedback(
                     self.litellmProvider.groundedness_measure_with_cot_reasons, name="Groundedness"
                 )
-                .on({"source": Selector.select_context(collect_list=True), "statement": Selector.select_record_output()})
+                .on({
+                    "source": Selector(lambda rec: rec.app._last_context if hasattr(rec.app, '_last_context') else ""),
+                    "statement": Selector.select_record_output()
+                })
             )
             self.feedbacks.append(f_groundedness)
         

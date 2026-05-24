@@ -217,7 +217,7 @@ class VectorDBAgent:
     
     def processQuery(self, query : str) -> str:
         state = self.app.invoke({"messages": [HumanMessage(content = query)]})
-        self.get_context(state)
+        self._last_context = self.get_context(state)
         return state["messages"][-1].content
     
     def visualize(self) -> None:
