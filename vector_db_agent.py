@@ -1,13 +1,12 @@
 from typing import Literal
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langgraph.prebuilt import tools_condition, ToolNode
-from langchain import hub
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables.graph import MermaidDrawMethod
 from langchain_huggingface import HuggingFaceEmbeddings
 from vector_db import VectorDB
-from prompts import grade_document_prompt
+from prompts import grade_document_prompt, rag_prompt
 from pydantic import BaseModel, Field
 import os
 from dotenv import load_dotenv
@@ -201,7 +200,10 @@ class VectorDBAgent:
         docs = last_message.content
 
         # Prompt
-        prompt = hub.pull("rlm/rag-prompt")
+        prompt = PromptTemplate(
+            template=rag_prompt,
+            input_variables=["context", "question"],
+        )
 
         # Chain
         rag_chain = prompt | self.llm
@@ -228,19 +230,11 @@ class VectorDBAgent:
             f.write(image_data)
 
 if __name__ == '__main__':
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.rate_limiters import InMemoryRateLimiter
+    from llm_factory import create_llm
     load_dotenv()
-    rate_limiter = InMemoryRateLimiter(
-        requests_per_second = 0.5,
-        check_every_n_seconds = 0.1
-    )
+
     vectorDBAgent = VectorDBAgent(
-        ChatMistralAI(
-            model_name = os.environ['MISTRAL_LLM_MODEL'], 
-            temperature = 0.1, 
-            rate_limiter = rate_limiter
-            ), 
+        create_llm(),
         verbose = True
         )
     # vectorDBAgent.visualize()

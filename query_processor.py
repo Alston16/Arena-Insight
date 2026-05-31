@@ -1,17 +1,20 @@
-import os
 from dotenv import load_dotenv
 from typing import List, Dict, Literal
-from langchain import hub
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.messages import HumanMessage
-from langchain.output_parsers.enum import EnumOutputParser
 from langgraph.graph import END, START, StateGraph, MessagesState
+from pydantic import BaseModel, Field
 from query_contextualizer import QueryContextualizer
-from prompts import route_system_prompt
+from prompts import route_system_prompt, rag_prompt
 from sql_db_agent import SQLDBAgent
 from vector_db_agent import VectorDBAgent
 from web_search_agent import WebSearchAgent
-from agents_enum import Agent
+
+
+class RouteDecision(BaseModel):
+    destination: Literal["sql_db_agent", "vector_db_agent", "web_search_agent", "generate"] = Field(
+        description="The next node to route to."
+    )
 
 class QueryProcessor:
     def __init__(self, llm : any, verbose : bool = False, maxRetry : int = 2, use_few_shot : bool = True, use_semantic_filtering : bool = True, use_metadata_filtering = True) -> None:
@@ -29,7 +32,7 @@ class QueryProcessor:
             [("system", route_system_prompt), ("placeholder", "{messages}")]
         )
 
-        self.route_chain = route_prompt | llm | EnumOutputParser(enum = Agent)
+        self.route_chain = route_prompt | llm.with_structured_output(RouteDecision)
 
         workflow = StateGraph(MessagesState)
 
@@ -58,16 +61,26 @@ class QueryProcessor:
                 print("---MAX RETRIES REACHED---")
                 print("Routed to web_search_agent")
             return "web_search_agent"
-        destination = self.route_chain.invoke({"messages": [state["messages"][-1]]}).value
+
+        # Give the router both the original question and latest retrieved context.
+        # This preserves architecture (router decides) while improving generate decisions.
+        first_message = state["messages"][0]
+        last_message = state["messages"][-1]
+        if first_message is last_message:
+            route_messages = [last_message]
+        else:
+            route_messages = [first_message, last_message]
+
+        destination = self.route_chain.invoke({"messages": route_messages}).destination
         if self.verbose:
             print("Routed to", destination)
         return destination
     
     def router(self, state: MessagesState) -> MessagesState:
         if isinstance(state["messages"][-1],HumanMessage):
-            return state
-        return {"messages" : [HumanMessage(state["messages"][-1].content)]}
-    
+            return {"messages": []}
+        return {"messages" : [HumanMessage(f"Retrieved context from previous agent:\n{state['messages'][-1].content}")]}
+
     def get_context(self, state : MessagesState) -> str:
         messages = state["messages"]
         last_message = messages[-1]
@@ -84,7 +97,10 @@ class QueryProcessor:
         docs = self.get_context(state)
 
         # Prompt
-        prompt = hub.pull("rlm/rag-prompt")
+        prompt = PromptTemplate(
+            template=rag_prompt,
+            input_variables=["context", "question"],
+        )
 
         # Chain
         rag_chain = prompt | self.llm
@@ -93,7 +109,7 @@ class QueryProcessor:
         response = rag_chain.invoke({"context": docs, "question": question})
         return {"messages": [response]}
     
-    def should_continue(self, state: MessagesState) -> Literal["tools", END]:
+    def should_continue(self, state: MessagesState) -> Literal["tools", "__end__"]:
         messages = state['messages']
         last_message = messages[-1]
         if last_message.tool_calls:
@@ -110,15 +126,11 @@ class QueryProcessor:
         return response["messages"][-1].content
 
 if __name__ == '__main__':
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.rate_limiters import InMemoryRateLimiter
+    from llm_factory import create_llm
     load_dotenv()
-    rate_limiter = InMemoryRateLimiter(
-        requests_per_second = 0.3,
-        check_every_n_seconds = 0.1
-    )
+
     queryProcessor = QueryProcessor(
-        ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter), 
+        create_llm(),
         verbose = True
         )
     chatHistory =[

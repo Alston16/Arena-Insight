@@ -1,19 +1,12 @@
-import os
 from dotenv import load_dotenv
-from langchain_mistralai import ChatMistralAI
-from langchain_core.rate_limiters import InMemoryRateLimiter
 import streamlit as st
 from query_processor import QueryProcessor
+from llm_factory import create_llm
 
 load_dotenv()
 
-rate_limiter = InMemoryRateLimiter(
-    requests_per_second = 0.3,
-    check_every_n_seconds = 0.1
-)
-
 queryProcessor = QueryProcessor(
-    ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature = 0.1, rate_limiter = rate_limiter), 
+    create_llm(),
     verbose = True
     )
 

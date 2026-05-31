@@ -1,6 +1,6 @@
 from langchain_chroma import Chroma
-from langchain.tools import StructuredTool
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.tools import StructuredTool
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer, util
 from transformers import pipeline
 

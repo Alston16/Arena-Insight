@@ -64,6 +64,33 @@ Python 3.x and MySQL.
 
 ## **Usage**
 
+### LLM Provider Configuration
+
+The project now uses a shared LLM factory so you can switch providers without changing application code.
+
+Set these variables in `.env`:
+
+```bash
+# Shared
+LLM_PROVIDER=mistral_api
+LLM_TEMPERATURE=0.1
+LLM_USE_RATE_LIMITER=true
+LLM_REQUESTS_PER_SECOND=0.3
+LLM_RATE_LIMIT_CHECK_SECONDS=0.1
+
+# For hosted Mistral API
+MISTRAL_LLM_MODEL=mistral-large-2407
+MISTRAL_API_KEY=your_mistral_api_key
+
+# For local Ollama models
+# LLM_PROVIDER=ollama_local
+# OLLAMA_MODEL=llama3.1
+# OLLAMA_BASE_URL=http://localhost:11434
+# OLLAMA_NUM_CTX=8192
+```
+
+To switch to a local model, only change `LLM_PROVIDER` to `ollama_local` and set `OLLAMA_MODEL`.
+
 Run the application using the below command :-
 ```bash
 streamlit run main.py

@@ -1,10 +1,11 @@
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.runnables.graph import MermaidDrawMethod
-from langchain import hub
+from langchain_core.prompts import PromptTemplate
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
+from prompts import rag_prompt
 
 class WebSearchAgent:
     def __init__(self, llm : any, verbose : bool = False) -> None:
@@ -41,7 +42,10 @@ class WebSearchAgent:
         context = self.get_context(state)
 
         # Prompt
-        prompt = hub.pull("rlm/rag-prompt")
+        prompt = PromptTemplate(
+            template=rag_prompt,
+            input_variables=["context", "question"],
+        )
 
         # Chain
         rag_chain = prompt | self.llm
@@ -61,16 +65,11 @@ class WebSearchAgent:
             f.write(image_data)
 
 if __name__ == '__main__':
-    from langchain_mistralai import ChatMistralAI
-    from langchain_core.rate_limiters import InMemoryRateLimiter
-    import os
+    from llm_factory import create_llm
     load_dotenv()
-    rate_limiter = InMemoryRateLimiter(
-        requests_per_second = 0.5,
-        check_every_n_seconds = 0.1
-    )
+
     webSearchAgent = WebSearchAgent(
-        ChatMistralAI(model_name = os.environ['MISTRAL_LLM_MODEL'],temperature=0.1, rate_limiter = rate_limiter), 
+        create_llm(),
         verbose = True
     )
     # webSearchAgent.visualize()
